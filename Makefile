@@ -7,7 +7,7 @@ CFLAGS+= -mthumb -march=armv7e-m
 CFLAGS+= -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS+= -mcpu=cortex-m4
 CFLAGS+= -fno-common -ffunction-sections -fdata-sections
-#CFLAGS+= -g -gdwarf-2
+CFLAGS+= -g -gdwarf-2
 #CFLAGS+= -save-temps
 
 
@@ -32,6 +32,9 @@ MASTER_OBJS+= uastdio.o
 MASTER_OBJS+= fsmcwr.o
 MASTER_OBJS+= ili9341.o
 MASTER_OBJS+= console.o
+MASTER_OBJS+= random.o
+MASTER_OBJS+= rtc4xx.o
+
 
 
 master.elf: $(MASTER_OBJS)
@@ -72,5 +75,18 @@ upload: master.upl
 	    -c "reset" \
 	    -c 'puts "--- DONE --------------------"' \
 	    -c "shutdown"
+
+
+
+debug:
+	@openocd \
+	    -c 'puts "--- START --------------------"' \
+	    -f 'interface/stlink-v2.cfg' \
+	    -f 'target/stm32f4x.cfg'  \
+	    -c 'puts "--- INIT --------------------"' \
+	    -c "init" \
+	    -c "halt" \
+	    -c "poll"
+
 
 #EOF

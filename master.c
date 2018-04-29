@@ -2,6 +2,8 @@
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/cm3/systick.h>
 
+#include <libopencm3/cm3/dwt.h>
+
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
@@ -12,6 +14,8 @@
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/stm32/dma.h>
 #include <libopencm3/stm32/fsmc.h>
+#include <libopencm3/stm32/pwr.h>
+#include <libopencm3/stm32/rng.h>
 
 
 #include <stdlib.h>
@@ -31,7 +35,18 @@
 #include <uastdio.h>
 #include <ili9341.h>
 #include <console.h>
+#include <random.h>
 
+#include <rtc4xx.h>
+
+
+volatile uint32_t loop_counter = 0;
+volatile uint32_t cpu_counter = 0;
+
+volatile uint32_t rate_value = 0;
+volatile uint32_t cpu_rate_value = 0;
+
+volatile static uint32_t systick_counter = 0;
 
 void delay(uint32_t n) {
     for (volatile int i = 0; i < n * 10; i++)
@@ -56,7 +71,12 @@ static void clock_setup(void) {
     rcc_periph_clock_enable(RCC_FSMC);
 
     rcc_periph_clock_enable(RCC_TIM2);
+    rcc_periph_clock_enable(RCC_TIM7);
     rcc_periph_clock_enable(RCC_USART1);
+
+    rcc_periph_clock_enable(RCC_PWR);
+    rcc_periph_clock_enable(RCC_RTC);
+    rcc_periph_clock_enable(RCC_RNG);
 }
 
 /*** USART ***/
@@ -95,7 +115,7 @@ void usart1_isr(void) {
     if (usart_rx_int_is_enable(USART1) && usart_recv_is_ready(USART1)) {
         data = usart_recv(USART1);
         buffer_put_byte(&stdin_buffer, data);
-        buffer_put_byte(&stdout_buffer, '3');
+        buffer_put_byte(&stdout_buffer, data);
         if (data == '\r')
             buffer_put_byte(&stdout_buffer, '\n');
         //usart_enable_tx_interrupt(USART1);
@@ -103,25 +123,19 @@ void usart1_isr(void) {
 }
 
 /*** TIM2 ***/
-static void tim2_setup(void) {
-
-    rcc_periph_clock_enable(RCC_TIM2);
+void tim2_setup(void) {
     nvic_enable_irq(NVIC_TIM2_IRQ);
-
     timer_reset(TIM2);
 
     timer_set_mode(TIM2, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
-
     timer_direction_up(TIM2);
     timer_set_prescaler(TIM2, 64);
-
     timer_disable_preload(TIM2);
     timer_continuous_mode(TIM2);
     timer_set_period(TIM2, 64);
-
     timer_set_oc_value(TIM2, TIM_OC1, 1);
-    timer_enable_irq(TIM2, TIM_DIER_CC1IE);
 
+    timer_enable_irq(TIM2, TIM_DIER_CC1IE);
     timer_enable_counter(TIM2);
 }
 
@@ -132,45 +146,79 @@ void tim2_isr(void) {
         uint8_t c;
         while ((c = buffer_get_byte(&stdout_buffer)) > 0)
             usart_send_blocking(USART1, c);
-
     }
 }
 
+/*** TIM7 ***/
+void tim7_setup(void) {
+    timer_reset(TIM7);
+    timer_set_prescaler(TIM7, rcc_apb2_frequency / 1000);
+    timer_set_period(TIM7, 10000);
+
+    nvic_enable_irq(NVIC_TIM7_IRQ);
+    timer_enable_update_event(TIM7);
+    timer_enable_irq(TIM7, TIM_DIER_UIE);
+    timer_enable_counter(TIM7);
+}
+
+void tim7_isr(void) {
+    if (timer_get_flag(TIM7, TIM_SR_UIF)) {
+        timer_clear_flag(TIM7, TIM_SR_UIF);
+        rate_value = loop_counter;
+        loop_counter = 0;
+
+        volatile uint32_t cpu_counter_new = dwt_read_cycle_counter();
+        cpu_rate_value = cpu_counter_new - cpu_counter;
+        cpu_counter = cpu_counter_new;
+    }
+}
+
+
+/*** SYSTICK ***/
+
 static void systick_setup(void) {
-    /* clock rate / 1000 to get 1mS interrupt rate */
-    systick_set_reload(168000);
-    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+    //systick_set_reload(168000);
+    //systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+    systick_set_frequency(1, rcc_ahb_frequency / 1000);
     systick_counter_enable();
     systick_interrupt_enable();
 }
 
+void sys_tick_handler(void) {
+    systick_counter++;
 
+}
+
+void delay_ms(uint32_t delay) {
+    uint32_t wake = systick_counter + delay;
+    while (wake > systick_counter);
+}
 
 void fsmc_setup(void) {
     /*
-      D0   PD14
-      D1   PD15
-      D2   PD0
-      D3   PD1
+       D0   PD14
+       D1   PD15
+       D2   PD0
+       D3   PD1
 
-      D4   PE7
-      D5   PE8
-      D6   PE9
-      D7   PE10
-      D8   PE11
-      D9   PE12
-      D10  PE13
-      D11  PE14
-      D12  PE15
+       D4   PE7
+       D5   PE8
+       D6   PE9
+       D7   PE10
+       D8   PE11
+       D9   PE12
+       D10  PE13
+       D11  PE14
+       D12  PE15
 
-      D13  PD8
-      D14  PD9
-      D15  PD10
+       D13  PD8
+       D14  PD9
+       D15  PD10
 
-      NOE  PD4
-      NWE  PD5
-      NE1  PD7
-      A18 PD13
+       NOE  PD4
+       NWE  PD5
+       NE1  PD7
+       A18  PD13
      */
 
 #define FSMC_PD (GPIO4 | GPIO5 | GPIO7 | GPIO13 | GPIO14 | GPIO15 | GPIO0 | GPIO1 | GPIO8 | GPIO9 | GPIO10)
@@ -185,13 +233,13 @@ void fsmc_setup(void) {
     gpio_set_af(GPIOE, GPIO_AF12, FSMC_PE);
 
     /*
-    FSMC_BTR(0) = FSMC_BTR_ACCMODx(FSMC_BTx_ACCMOD_B) | 
-                FSMC_BTR_DATLATx(0) |
-                FSMC_BTR_CLKDIVx(0) |
-                FSMC_BTR_BUSTURNx(0) |
-                FSMC_BTR_DATASTx(5) |
-                FSMC_BTR_ADDHLDx(0) |
-                FSMC_BTR_ADDSETx(1);
+       FSMC_BTR(0) = FSMC_BTR_ACCMODx(FSMC_BTx_ACCMOD_B) | 
+       FSMC_BTR_DATLATx(0) |
+       FSMC_BTR_CLKDIVx(0) |
+       FSMC_BTR_BUSTURNx(0) |
+       FSMC_BTR_DATASTx(5) |
+       FSMC_BTR_ADDHLDx(0) |
+       FSMC_BTR_ADDSETx(1);
      */
 
     /* FSMC_BCR(0) = FSMC_BCR_WREN | FSMC_BCR_MWID | FSMC_BCR_MBKEN; */
@@ -223,34 +271,81 @@ void demo_gpio_setup(void) {
     gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO7);
 }
 
+
+
+/*** RTC ***/
+
+void rtc_init1(void) {
+
+    pwr_backup_domain_enable_write();
+    rcc_backup_domain_software_reset();
+
+    rcc_rtc_clock_enable();
+    rcc_external_lowspeed_oscillator_enable();
+    rcc_rtc_clock_source_selection(RCC_BDCR_RTCSEL_LSE);
+
+    rtc_write_protection_disable();
+
+    rtc_set_calibration_output_1hz();
+
+    rtc_write_protection_disable();
+    rtc_calibration_output_disable();
+
+    rtc_init_mode_enable();
+
+    //rtc_write_protection_disable();
+    rtc_write_prescaler(0x7F, 0xFF);
+
+    rtc_init_mode_disable();
+
+    rtc_write_protection_enable();
+    pwr_backup_domain_disable_write();
+
+
+}
+
 int main(void) {
     clock_setup();
     systick_setup();
     io_setup();
     usart_setup();
     tim2_setup();
-
+    tim7_setup();
     delay(10);
 
     fsmc_setup();
     lcd_setup();
     lcd_clear();
-    lcd_clear();
 
-    console_xyputs(&console, 0, 0,  "STM32-F4 CONSOLE V0.1\r\n");
-    console_xyputs(&console,  1, 0,  "SYS READY>");
+
+    rng_enable();
+    dwt_enable_cycle_counter();
 
     uint32_t i = 1;
+
+    console_xyputs(&console, 0, 0, "STM32-F4 CONSOLE V0.1");
+    console_xyputs(&console, 1, 0, "SYS READY>");
+
+    rtc_init1();
+
     while (1) {
 
-        #define STR_LEN 16
+
+#define STR_LEN 20
         uint8_t str[STR_LEN + 1];
 
+        snprintf(str, STR_LEN, "RT %4u CPU %4.2f", rate_value, (cpu_rate_value * 1.0) / 168000000.0f);
+        console_xyputs(&console, 3, 0, str);
+
+        snprintf(str, STR_LEN, "RTC 0x%08lX", RTC_TR);
+        console_xyputs(&console, 5, 0, str);
+        snprintf(str, STR_LEN, "RTC 0x%08lX", RTC_DR);
+        console_xyputs(&console, 6, 0, str);
 
         snprintf(str, STR_LEN, "0x%08X", i);
         console_xyputs(&console, 16, 0, str);
 
-        uint16_t y_value = i %  LCD_HEIGHT;
+        uint16_t y_value = i % LCD_HEIGHT;
         uint16_t y_prev;
 
         uint16_t x_value = i % LCD_WIDTH;
@@ -264,7 +359,7 @@ int main(void) {
         x_prev = x_value;
 
         delay(10);
-
+        loop_counter++;
         i++;
     }
     return 0;
