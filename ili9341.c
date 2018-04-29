@@ -114,13 +114,14 @@ void lcd_setup(void) {
     lcd_write_command(LCD_COLMOD);
     lcd_write_data(0x55);
 
-    lcd_write_command(LCD_FRMCTR1);
-    lcd_write_data(0x00);
-    lcd_write_data(0x1A);
+    //lcd_write_command(LCD_FRMCTR1);
+    //lcd_write_data(0x00);
+    //lcd_write_data(0x1A);
 
     lcd_write_command(LCD_DISSET5);
     lcd_write_data(0x0A);
     lcd_write_data(0xA2);
+
 
     lcd_write_command(LCD_GAMSET);
     lcd_write_data(0x01);
@@ -200,10 +201,10 @@ void lcd_setup(void) {
 
 #define LCD_DISCTRL 0xB6
 
-    lcd_write_command(LCD_DISCTRL);
-    lcd_write_data(0x00);
-    lcd_write_data(0xA2);
-    lcd_write_data(0x27);
+    //lcd_write_command(LCD_DISCTRL);
+    //lcd_write_data(0x00);
+    //lcd_write_data(0xA2);
+    //lcd_write_data(0x27);
 
     //lcd_write_command(LCD_PWONCTRL);
     //lcd_write_data(0x64);
@@ -225,11 +226,16 @@ void lcd_setup(void) {
     //lcd_write_command(LCD_PTLON);
 
 
-    lcd_set_memory_access(LCD_MADCTL_MV | LCD_MADCTL_RGB);
+    //lcd_set_memory_access(LCD_MADCTL_MV | LCD_MADCTL_RGB);
 
     lcd_write_command(LCD_FRMCTR1);
     lcd_write_data(0x00);
     lcd_write_data(0x18);
+
+    //lcd_set_memory_access(LCD_MADCTL_MX);
+    //lcd_write_command(LCD_MADCTL);
+    //lcd_write_byte(0x00);
+
 
     lcd_sleep_out();
     delay_ms(120);
@@ -268,8 +274,8 @@ void lcd_clear(void) {
 
 void lcd_draw_pixel(uint16_t x, uint16_t y, uint32_t color) {
     lcd_addr_window(x, y, x, y);
-    lcd_write_command(LCD_RAMWR);
     uint16_t c565 = lcd_rgb2c(color);
+    lcd_write_command(LCD_RAMWR);
     lcd_write_data(c565);
 }
 
@@ -333,8 +339,8 @@ void lcd_draw_rest(uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint32_t co
 uint16_t lcd_rgb2c(uint32_t rgb) {
 #if 1
     return (uint16_t) 
-        (((rgb & 0xF80000) >> 19) |
-         ((rgb & 0x00FC00 ) >> 5) |
+        (((rgb & 0xF80000) >> 19)|
+         ((rgb & 0x00F800) >> 6) |
          ((rgb & 0x0000F8) << 8));
 #else
     return (uint16_t) 

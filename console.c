@@ -12,8 +12,8 @@
 font_t basefont = {
     .width = 8,
     .height = 14,
-    .start = 32,
-    .length = 0x5F,
+    .start = 0, //32,
+    .length = 255, //0x5F,
     .bitmap = basefont_bitmap
 };
 
