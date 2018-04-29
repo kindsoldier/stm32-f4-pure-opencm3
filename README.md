@@ -9,13 +9,16 @@ Released
 - USART buffered interface
 - newlib minimal syscalls
 - Board RTC timer driver
-
+- Random generator driver
 
 No guarantees. This code is given only as an sample.
 
 But must work good. =) I try to publish a good code.
 
 Also can see http://wiki.unix7.org/mcu/start
+
+![](http://wiki.unix7.org/_media/mcu/img_20180429_222955-640.jpg)
+
 
 
 
