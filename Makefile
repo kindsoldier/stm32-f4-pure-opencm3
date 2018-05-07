@@ -1,5 +1,6 @@
+#
 # Author, Copyright: Oleg Borodin <onborodin@gmail.com> 2018
-
+#
 .SECONDARY:
 
 CFLAGS+= -I. -Os  -DSTM32F4 -std=c99

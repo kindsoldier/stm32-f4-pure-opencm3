@@ -192,13 +192,16 @@ static void systick_setup(void) {
 
 void sys_tick_handler(void) {
     systick_counter++;
-
 }
 
 void delay_ms(uint32_t delay) {
     uint32_t wake = systick_counter + delay;
     while (wake > systick_counter);
 }
+
+
+
+/*** FSMC ***/
 
 void fsmc_setup(void) {
     /*
@@ -217,11 +220,11 @@ void fsmc_setup(void) {
 #define FSMC_PE (GPIO7 | GPIO8 | GPIO9 | GPIO10 | GPIO11 | GPIO12 | GPIO13 | GPIO14 | GPIO15)
 
     gpio_mode_setup(GPIOD, GPIO_MODE_AF, GPIO_PUPD_NONE, FSMC_PD);
-    gpio_set_output_options(GPIOD, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, FSMC_PD);
+    gpio_set_output_options(GPIOD, GPIO_OTYPE_PP, GPIO_OSPEED_100MHZ, FSMC_PD);
     gpio_set_af(GPIOD, GPIO_AF12, FSMC_PD);
 
     gpio_mode_setup(GPIOE, GPIO_MODE_AF, GPIO_PUPD_NONE, FSMC_PE);
-    gpio_set_output_options(GPIOE, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, FSMC_PE);
+    gpio_set_output_options(GPIOE, GPIO_OTYPE_PP, GPIO_OSPEED_100MHZ, FSMC_PE);
     gpio_set_af(GPIOE, GPIO_AF12, FSMC_PE);
 
     /*
@@ -267,7 +270,7 @@ void demo_gpio_setup(void) {
 void rtc_init(void) {
 
     pwr_backup_domain_enable_write();
-    rcc_backup_domain_software_reset();
+    //rcc_backup_domain_software_reset();
 
     rcc_rtc_clock_enable();
     rcc_external_lowspeed_oscillator_enable();
@@ -301,9 +304,6 @@ static void exti5_setup(void) {
     exti_enable_request(EXTI5);
 }
 
-uint32_t exti_counter = 0;
-
-#define TS_UNK  0
 #define TS_PRS  1
 #define TS_RLS  2
 
@@ -340,7 +340,6 @@ void exti9_5_isr(void) {
 
             if (hold_time > HOLD_TIME_MIN) {
                 printf("TS UP %d\r\n", hold_time);
-                //lcd_draw_pixel(ts_get_x(), ts_get_y(), LCD_BLUE);
             }
 
             return;
@@ -360,18 +359,18 @@ int main(void) {
     fsmc_setup();
     lcd_setup();
     lcd_clear();
+    ts_spi_setup();
+    exti5_setup();
 
-    rng_enable();
-    dwt_enable_cycle_counter();
+    //rng_enable();
+    //dwt_enable_cycle_counter();
 
     uint32_t i = 1;
 
     console_xyputs(&console, 0, 0, "STM32-F4 CONSOLE V0.1");
     console_xyputs(&console, 1, 0, "SYS READY>");
 
-    rtc_init();
-    ts_spi_setup();
-    exti5_setup();
+    //rtc_init();
 
     while (1) {
         console_xyputs(&console, 0, 0, "STM32-F4 CONSOLE V0.1");

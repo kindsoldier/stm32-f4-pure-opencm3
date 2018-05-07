@@ -1,4 +1,6 @@
 
+/* $Id$ */
+
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -114,10 +116,6 @@ void lcd_setup(void) {
     lcd_write_command(LCD_COLMOD);
     lcd_write_data(0x55);
 
-    //lcd_write_command(LCD_FRMCTR1);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x1A);
-
     lcd_write_command(LCD_DISSET5);
     lcd_write_data(0x0A);
     lcd_write_data(0xA2);
@@ -174,68 +172,14 @@ void lcd_setup(void) {
 
     lcd_write_command(LCD_IDMOFF);
 
-#define LCD_IFCTL 0xF6
-    //lcd_write_command(LCD_IFCTL);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x00);
-
-    //#define LCD_BCTRL_BIT   (1 << 5)
-    //#define LCD_BL_BIT      (1 << 2)
-    //lcd_write_command(LCD_WRCTRLD);
-    //lcd_write_data(LCD_BCTRL_BIT);
-    //lcd_write_command(LCD_WRDISBV);
-    //lcd_write_data(0xFF);
-
-    //lcd_set_frame_rate_normal(LCD_FRAME_RATE_65HZ, LCD_FRAME_RATE_DIV4);
-    //lcd_set_frame_rate_idle(LCD_FRAME_RATE_65HZ, LCD_FRAME_RATE_DIV8);
-    //lcd_set_frame_rate_partial(LCD_FRAME_RATE_65HZ, LCD_FRAME_RATE_DIV8);
     lcd_set_normal_mode();
-
-    //lcd_write_command(LCD_VSCRSADD);
-    //lcd_write_data(0x67);
-    //lcd_write_data(0x56);
 
     lcd_write_command(LCD_COLMOD);
     lcd_write_data(0x55);
 
-#define LCD_DISCTRL 0xB6
-
-    //lcd_write_command(LCD_DISCTRL);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0xA2);
-    //lcd_write_data(0x27);
-
-    //lcd_write_command(LCD_PWONCTRL);
-    //lcd_write_data(0x64);
-    //lcd_write_data(0x03);
-    //lcd_write_data(0X12);
-    //lcd_write_data(0X81);
-
-    //lcd_write_command(LCD_VSCRSADD);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x00);
-
-    //#define LCD_PLTAR 0x30
-    //lcd_write_command(LCD_PLTAR);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x00);
-    //lcd_write_data(0x01);
-    //lcd_write_data(0x40);
-    //#define LCD_PLTON 0x12
-    //lcd_write_command(LCD_PTLON);
-
-
-    //lcd_set_memory_access(LCD_MADCTL_MV | LCD_MADCTL_RGB);
-
     lcd_write_command(LCD_FRMCTR1);
     lcd_write_data(0x00);
     lcd_write_data(0x18);
-
-    //lcd_set_memory_access(LCD_MADCTL_MX);
-    //lcd_write_command(LCD_MADCTL);
-    //lcd_write_byte(0x00);
-
 
     lcd_sleep_out();
     delay_ms(120);
@@ -337,17 +281,10 @@ void lcd_draw_rest(uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint32_t co
 }
 
 uint16_t lcd_rgb2c(uint32_t rgb) {
-#if 1
     return (uint16_t) 
         (((rgb & 0xF80000) >> 19)|
          ((rgb & 0x00F800) >> 6) |
          ((rgb & 0x0000F8) << 8));
-#else
-    return (uint16_t) 
-        (((rgb & 0xF80000) >> 11) |
-         ((rgb & 0x00FC00 ) >> 5) |
-         ((rgb & 0x0000F8) >> 3));
-#endif
 }
 
 void lcd_draw_char(uint16_t xbase, uint16_t ybase, font_t *font, uint8_t c) {
