@@ -1,5 +1,5 @@
 
-/* $Id$ */
+/* Author, Copyright: Oleg Borodin <onborodin@gmail.com> 2018 */
 
 #include <libopencm3/stm32/rng.h>
 

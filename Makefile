@@ -34,7 +34,7 @@ MASTER_OBJS+= ili9341.o
 MASTER_OBJS+= console.o
 MASTER_OBJS+= random.o
 MASTER_OBJS+= rtc4xx.o
-
+MASTER_OBJS+= xpt2046.o
 
 
 master.elf: $(MASTER_OBJS)

@@ -1,5 +1,5 @@
 
-/* $Id$ */
+/* Author, Copyright: Oleg Borodin <onborodin@gmail.com> 2018 */
 
 #ifndef RTC4XX_H_XYZ
 #define RTC4XX_H_XYZ

@@ -4,6 +4,7 @@
 
 #include <libopencm3/cm3/dwt.h>
 
+#include <libopencm3/stm32/syscfg.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
@@ -16,6 +17,8 @@
 #include <libopencm3/stm32/fsmc.h>
 #include <libopencm3/stm32/pwr.h>
 #include <libopencm3/stm32/rng.h>
+#include <libopencm3/stm32/can.h>
+#include <libopencm3/stm32/exti.h>
 
 
 #include <stdlib.h>
@@ -38,7 +41,7 @@
 #include <random.h>
 
 #include <rtc4xx.h>
-
+#include <xpt2046.h>
 
 volatile uint32_t loop_counter = 0;
 volatile uint32_t cpu_counter = 0;
@@ -68,6 +71,9 @@ static void clock_setup(void) {
     rcc_periph_clock_enable(RCC_GPIOD);
     rcc_periph_clock_enable(RCC_GPIOE);
 
+    rcc_periph_clock_enable(RCC_SPI2);
+    rcc_periph_clock_enable(RCC_SYSCFG);
+
     rcc_periph_clock_enable(RCC_FSMC);
 
     rcc_periph_clock_enable(RCC_TIM2);
@@ -77,6 +83,8 @@ static void clock_setup(void) {
     rcc_periph_clock_enable(RCC_PWR);
     rcc_periph_clock_enable(RCC_RTC);
     rcc_periph_clock_enable(RCC_RNG);
+
+
 }
 
 /*** USART ***/
@@ -87,7 +95,6 @@ void usart_setup(void) {
 
     gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO9 | GPIO10);
     gpio_set_af(GPIOA, GPIO_AF7, GPIO9 | GPIO10);
-
 
     usart_set_baudrate(USART1, 115200);
     usart_set_databits(USART1, 8);
@@ -118,7 +125,6 @@ void usart1_isr(void) {
         buffer_put_byte(&stdout_buffer, data);
         if (data == '\r')
             buffer_put_byte(&stdout_buffer, '\n');
-        //usart_enable_tx_interrupt(USART1);
     }
 }
 
@@ -196,29 +202,15 @@ void delay_ms(uint32_t delay) {
 
 void fsmc_setup(void) {
     /*
-       D0   PD14
-       D1   PD15
-       D2   PD0
-       D3   PD1
-
-       D4   PE7
-       D5   PE8
-       D6   PE9
-       D7   PE10
-       D8   PE11
-       D9   PE12
-       D10  PE13
-       D11  PE14
+       D0   PD14    D8   PE11   NOE  PD4
+       D1   PD15    D9   PE12   NWE  PD5
+       D2   PD0     D10  PE13   NE1  PD7
+       D3   PD1     D11  PE14   A18  PD13
        D12  PE15
-
-       D13  PD8
-       D14  PD9
-       D15  PD10
-
-       NOE  PD4
-       NWE  PD5
-       NE1  PD7
-       A18  PD13
+       D4   PE7     
+       D5   PE8     D13  PD8
+       D6   PE9     D14  PD9
+       D7   PE10    D15  PD10
      */
 
 #define FSMC_PD (GPIO4 | GPIO5 | GPIO7 | GPIO13 | GPIO14 | GPIO15 | GPIO0 | GPIO1 | GPIO8 | GPIO9 | GPIO10)
@@ -271,11 +263,8 @@ void demo_gpio_setup(void) {
     gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO7);
 }
 
-
-
 /*** RTC ***/
-
-void rtc_init1(void) {
+void rtc_init(void) {
 
     pwr_backup_domain_enable_write();
     rcc_backup_domain_software_reset();
@@ -283,25 +272,80 @@ void rtc_init1(void) {
     rcc_rtc_clock_enable();
     rcc_external_lowspeed_oscillator_enable();
     rcc_rtc_clock_source_selection(RCC_BDCR_RTCSEL_LSE);
-
     rtc_write_protection_disable();
-
     rtc_set_calibration_output_1hz();
-
     rtc_write_protection_disable();
     rtc_calibration_output_disable();
 
     rtc_init_mode_enable();
-
-    //rtc_write_protection_disable();
     rtc_write_prescaler(0x7F, 0xFF);
 
     rtc_init_mode_disable();
-
     rtc_write_protection_enable();
     pwr_backup_domain_disable_write();
+}
 
 
+/*** EXTI ***/
+
+#define TS_IRQ_PORT  GPIOC
+#define TS_IRQ_PIN   GPIO5
+
+static void exti5_setup(void) {
+    nvic_enable_irq(NVIC_EXTI9_5_IRQ);
+
+    gpio_mode_setup(GPIOC, GPIO_MODE_INPUT, GPIO_PUPD_PULLUP, GPIO5);
+
+    exti_set_trigger(EXTI5, EXTI_TRIGGER_BOTH);
+    exti_select_source(EXTI5, GPIOC);
+    exti_enable_request(EXTI5);
+}
+
+uint32_t exti_counter = 0;
+
+#define TS_UNK  0
+#define TS_PRS  1
+#define TS_RLS  2
+
+volatile static uint8_t ts_prev_status = TS_PRS;
+volatile static uint8_t ts_curr_status = TS_RLS;
+
+
+volatile static uint32_t ts_press_time = 0;
+volatile static uint32_t ts_release_time = 0;
+
+#define HOLD_TIME_MIN   10
+
+void exti9_5_isr(void) {
+
+    if (exti_get_flag_status(EXTI5)) {
+        exti_reset_request(EXTI5);
+
+        if (gpio_get(TS_IRQ_PORT, TS_IRQ_PIN)) {
+            ts_curr_status = TS_RLS;
+        } else {
+            ts_curr_status = TS_PRS;
+        }
+
+        if ((ts_prev_status == TS_RLS) && (ts_curr_status == TS_PRS)) {
+            ts_prev_status = ts_curr_status;
+            ts_press_time = systick_counter;
+            return;
+        }
+
+        if ((ts_prev_status == TS_PRS) && (ts_curr_status == TS_RLS)) {
+            ts_prev_status = ts_curr_status;
+            ts_release_time = systick_counter;
+            uint32_t hold_time = ts_release_time - ts_press_time;
+
+            if (hold_time > HOLD_TIME_MIN) {
+                printf("TS UP %d\r\n", hold_time);
+                //lcd_draw_pixel(ts_get_x(), ts_get_y(), LCD_BLUE);
+            }
+
+            return;
+        }
+    }
 }
 
 int main(void) {
@@ -317,7 +361,6 @@ int main(void) {
     lcd_setup();
     lcd_clear();
 
-
     rng_enable();
     dwt_enable_cycle_counter();
 
@@ -326,39 +369,54 @@ int main(void) {
     console_xyputs(&console, 0, 0, "STM32-F4 CONSOLE V0.1");
     console_xyputs(&console, 1, 0, "SYS READY>");
 
-    rtc_init1();
+    rtc_init();
+    ts_spi_setup();
+    exti5_setup();
 
     while (1) {
-
+        console_xyputs(&console, 0, 0, "STM32-F4 CONSOLE V0.1");
 
 #define STR_LEN 20
         uint8_t str[STR_LEN + 1];
 
-        snprintf(str, STR_LEN, "RT %4u CPU %4.2f", rate_value, (cpu_rate_value * 1.0) / 168000000.0f);
-        console_xyputs(&console, 3, 0, str);
+        snprintf(str, STR_LEN, "RT %4u CPU %4.2f", rate_value,
+                 (cpu_rate_value * 1.0) / 168000000.0f);
+        console_xyputs(&console, 2, 0, str);
 
-        snprintf(str, STR_LEN, "RTC 0x%08lX", RTC_TR);
+#if 0
+        snprintf(str, STR_LEN, "RTC_TR 0x%08lX", RTC_TR);
         console_xyputs(&console, 5, 0, str);
-        snprintf(str, STR_LEN, "RTC 0x%08lX", RTC_DR);
+        snprintf(str, STR_LEN, "RTC_DR 0x%08lX", RTC_DR);
         console_xyputs(&console, 6, 0, str);
+#endif
 
         snprintf(str, STR_LEN, "0x%08X", i);
         console_xyputs(&console, 16, 0, str);
 
+#if 1
+
         uint16_t y_value = i % LCD_HEIGHT;
         uint16_t y_prev;
 
-        uint16_t x_value = i % LCD_WIDTH;
-        uint16_t x_prev;
-
+        int16_t x_value = i % LCD_WIDTH;
+        int16_t x_prev;
         if ((x_prev != x_value) && (y_prev != y_value)) {
             lcd_write_rect(20, y_prev, 10, 10, LCD_BLUE);
             lcd_write_rect(20, y_value, 10, 10, LCD_GREEN);
         }
         y_prev = y_value;
         x_prev = x_value;
+#endif
 
-        delay(10);
+        while (ts_curr_status == TS_PRS) {
+            uint16_t x = ts_get_x();
+            uint16_t y = ts_get_y();
+            if (x < 25 && y < 25)
+                lcd_clear();
+            lcd_draw_pixel(x, y, LCD_BLUE);
+        }
+
+        delay_ms(10);
         loop_counter++;
         i++;
     }

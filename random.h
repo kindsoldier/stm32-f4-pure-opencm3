@@ -1,4 +1,4 @@
-/* $Id$ */
+/* Author, Copyright: Oleg Borodin <onborodin@gmail.com> 2018 */
 
 #ifndef _RANDOM_H_ICU_
 #define _RANDOM_H_ICU_
