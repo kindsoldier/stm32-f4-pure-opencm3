@@ -131,7 +131,7 @@ void usart1_isr(void) {
 /*** TIM2 ***/
 void tim2_setup(void) {
     nvic_enable_irq(NVIC_TIM2_IRQ);
-    timer_reset(TIM2);
+    //timer_reset(TIM2);
 
     timer_set_mode(TIM2, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
     timer_direction_up(TIM2);
@@ -157,7 +157,7 @@ void tim2_isr(void) {
 
 /*** TIM7 ***/
 void tim7_setup(void) {
-    timer_reset(TIM7);
+    //timer_reset(TIM7);
     timer_set_prescaler(TIM7, rcc_apb2_frequency / 1000);
     timer_set_period(TIM7, 10000);
 
